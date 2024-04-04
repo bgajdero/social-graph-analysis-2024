@@ -10,6 +10,6 @@ Gajderowicz, B., Fisher, A., Mago, V.: (preperation) "COVID-19 Misinformation di
 
 
 # Run
-1. `python clster.py`
-1. `analysis.py`
-1. `stats.py`
+1. `python cluster.py`
+1. `python analysis.py`
+1. `python stats.py`
