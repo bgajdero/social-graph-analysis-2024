@@ -1,0 +1,33 @@
+name: pyTwitter
+channels:
+  - anaconda
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.8
+  - numpy
+  - matplotlib
+  - seaborn
+  - pandas==1.4.2
+  - pytorch
+  - scikit-learn
+  - nltk
+  - tqdm
+  - click
+  - unidecode
+  - plotly
+  - spacy
+  - networkx=2.6
+  - xlsxwriter
+  - jupyter
+  - pygraphviz
+  - pyvis
+  - pip
+  - pip:
+    - openai
+    - pyyaml
+    - graphviz
+    - openpyxl
+    - communities
+    - rustworkx
+ 
