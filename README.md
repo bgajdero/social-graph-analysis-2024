@@ -7,6 +7,7 @@ Gajderowicz, B., Fisher, A., Mago, V.: (preperation) "Graph pruning for identify
 # Install
 1. `conda env create -f environment.yml`
 1. `conda activate pyTwitter`
+1. `Downlaod the data az a zip file from 
 1. `unzip data.zip > data`
 
 # Run
