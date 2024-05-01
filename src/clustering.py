@@ -1,8 +1,14 @@
+############################################################################
+# Perform main clusering and pruning
+# Based on <location> paramenter.
+############################################################################
+
+
 #!/usr/bin/env python
 # coding: utf-8
 
 
-from misc_lib import *
+from .misc_lib import *
 import re, os, tqdm, glob, sys
 import pandas as pd, numpy as np
 from matplotlib import pyplot as plt
@@ -19,17 +25,19 @@ from pyvis import network as pvnet
 # location = 'ontario'
 # location = 'british_columbia'
 # location = 'quebec'
+location = sys.argv[1]
 
-location = sys.args[1]
-top_N = 50
 
 # Some part take a long time to run. To reduce rerunning these portions,
 # output is sved and can be read in instead of regernreating it. 
 # These flags control whether regeneration should run.
+GEN_CENTR = True
 GEN_MAINTWEETS = True
 RERUN_SUBFOLLOW = True
 GEN_COMM = True
 
+# Keep top 50 author nodes
+top_N = 50
 
 def clamp(rgb): 
     r,g,b = [max(0, min(round(255*x), 255)) for x in rgb]
@@ -74,13 +82,42 @@ def plot_g_pyviz(G, name='out.html', height='500px', width='500px', graph_type='
 
 
 
-filename = '../data/%s_retweets.csv'%(location)
+filename = './data/%s_retweets.csv'%(location)
 df = pd.read_csv(filename)
 tweets = df[['tweeter_username','username','tweet_id']]
 for c in ['tweeter_username','username']:
     tweets[c] = tweets[c].apply(lambda u: u.lower())
 # tweets = tweets.values.tolist()
-centralities = pd.read_csv('results/centralities_%s.csv'%(location))
+if GEN_CENTR:
+    edges = tweets[['tweeter_username','username','tweet_id']].copy()
+    edges.columns = ['from','to','N']
+    weighted = edges.groupby(['from','to'])['N'].count().reset_index(drop=False)
+    weighted['weight'] = 1/weighted['N']
+
+    G = nx.DiGraph()
+    _=[G.add_edge(x,y,weight=w, title=n, size=n) for [x,y,w,n] in weighted[['to','from','weight','N']].values]
+    mapping = list(G.nodes())
+    adj = nx.adjacency_matrix(G).todense()
+    adj = np.array(adj)
+    print(adj.shape)
+    for n in G.nodes():
+        G.nodes[n]['size'] = (np.log1p(G.degree(n))+1)**1.7
+
+    prank_df = pd.DataFrame([nx.pagerank(G, alpha=0.9)]).T.reset_index(drop=False)
+    prank_df.columns = ['node','prank']
+    prank_df = prank_df.sort_values(by=['prank'])
+    btwn_df = pd.DataFrame([nx.betweenness_centrality(G)]).T.reset_index(drop=False)
+    btwn_df.columns = ['node','btwn']
+    btwn_df = btwn_df.sort_values(by=['btwn'])
+    centr_df = pd.DataFrame([nx.eigenvector_centrality(G)]).T.reset_index(drop=False)
+    centr_df.columns = ['node','centr']
+    centr_df.sort_values(by=['centr'])
+
+    centralities = prank_df.merge(btwn_df, on=['node']).merge(centr_df, on=['node'])
+    centralities.to_csv('./data/results/centralities_%s.csv'%(location),index=False)
+    centralities = pd.read_csv('./data/results/centralities_%s.csv'%(location))
+else:
+    centralities = pd.read_csv('./data/results/centralities_%s.csv'%(location))
 
 
 btwn_th = centralities.quantile(.8).btwn
@@ -130,9 +167,9 @@ print(sub_tweets.shape[0], sub_tweets.tweet_id.nunique())
 ##################################################
 # get followers
 import glob, re
-follower_files = glob.glob('../data/degree_progress/*.csv')
+follower_files = glob.glob('./data/degree_progress/*.csv')
 res = []
-for f in tqdm.tqdm(follower_files, total=len(follower_files)):
+for f in tqdm.tqdm(follower_files, total=len(follower_files), desc='load follows'):
     username = re.match(r'.*/(.+)_followers\.csv',f).groups()[0]
     if username in profiles.node.values:
         tmp = pd.read_csv(f)
@@ -147,7 +184,7 @@ print(follow_df.node.nunique())
 # get main tweets to focus on 
 if GEN_MAINTWEETS:
     main_tweets = []
-    for tweet_id,data_sub in tqdm.tqdm(tweets[tweets['tweet_id'].isin(sub_tweets.tweet_id)].groupby(['tweet_id']), total=sub_tweets.tweet_id.nunique()):
+    for tweet_id,data_sub in tqdm.tqdm(tweets[tweets['tweet_id'].isin(sub_tweets.tweet_id)].groupby(['tweet_id']), total=sub_tweets.tweet_id.nunique(), desc='main tweets'):
         tweeter = data_sub.iloc[0].tweeter_username.lower()
         names = list(set(list(data_sub.tweeter_username) + list(data_sub.username)))
         names.sort()
@@ -169,9 +206,9 @@ if GEN_MAINTWEETS:
             main_tweets = main_tweets.drop(col, axis=1)
         except KeyError:
             pass
-    main_tweets.to_csv('../graphs/%s_2_main_tweets_sub_follower.csv'%(location))
+    main_tweets.to_csv('./data/graphs/%s_main_tweets_sub_follower.csv'%(location))
 else:
-    main_tweets = pd.read_csv('../graphs/%s_2_main_tweets_sub_follower.csv'%(location))
+    main_tweets = pd.read_csv('./data/graphs/%s_main_tweets_sub_follower.csv'%(location))
 
 
 ##########################################
@@ -180,18 +217,19 @@ else:
 if RERUN_SUBFOLLOW:
     names2 = []
     follow_sub2 = []
-    for tweet_id in tqdm.tqdm(main_tweets.tweet_id):
+    for tweet_id in tqdm.tqdm(main_tweets.tweet_id, desc='subflow'):
         data_sub = tweets[tweets.tweet_id==tweet_id]
         tweeter = data_sub.tweeter_username.iloc[0]
         names1 = list(set(list(data_sub.tweeter_username) + list(data_sub.username)))
         names2 += names1
         follow_sub1 = [[f,u]  for f,u in follow_df.values if f in names and u in names1 ]
         follow_sub2 += follow_sub1
-        pd.DataFrame(names2).to_csv('../graphs/%s_2_names2_sub_followers.csv'%(location), index=False)
-        pd.DataFrame(follow_sub2).to_csv('../graphs/%s_2_follow_sub2_sub_followers.csv'%(location), index=False)
+        pd.DataFrame(names2).to_csv('./data/graphs/%s_names2_sub_followers.csv'%(location), index=False)
+        pd.DataFrame(follow_sub2).to_csv('./data/graphs/%s_follow_sub2_sub_followers.csv'%(location), index=False)
 else:
-    names2 = pd.read_csv('../graphs/%s_2_names2_sub_followers.csv'%(location)).tolist()
-    follow_sub2 = pd.to_csv('../graphs/%s_2_follow_sub2_sub_followers.csv'%(location), index=False).tolist()
+    names2 = pd.read_csv('./data/graphs/%s_names2_sub_followers.csv'%(location)).values.tolist()
+    names2 = flatten(names2)
+    follow_sub2 = pd.read_csv('./data/graphs/%s_follow_sub2_sub_followers.csv'%(location)).values.tolist()
 
 #########################################
 # Clean up follows and list of names
@@ -219,7 +257,7 @@ for i in range(main_tweets.shape[0]):
     rgb = colorsys.hsv_to_rgb(r/255,g/255,b/255)
     color_tab.append(rgb)
     print(i, [round(255*x) for x in rgb])
-for i,tweet_id in enumerate(tqdm.tqdm(main_tweets.tweet_id)):
+for i,tweet_id in enumerate(tqdm.tqdm(main_tweets.tweet_id, desc='G2_draw')):
     _=[G2_draw.add_edge(x,y, title=str(d)) for [x,y,d] in data if d==tweet_id]
     _=[G2_draw.add_edge(x,y, color=clamp(color_tab[i]), title=str(d)) for [x,y,d] in data if d==tweet_id]
 
@@ -228,10 +266,12 @@ main_tweets.groupby('tweeter').max().drop(columns=['tweet_id','follows','names']
     merge(main_tweets.groupby('tweeter').std().drop(columns=['tweet_id', 'prank','btwn','centr']), left_index=True, right_index=True).rename(columns={'follows':'follows_mean', 'names':'names_mean'}).\
     merge(pd.DataFrame(main_tweets.tweeter.value_counts()), left_index=True, right_index=True).\
     sort_values(by=['tweeter'],ascending=False).\
-    to_csv('../graphs/sub_tweets_top_user_stats_%s.csv'%(location),index=True)
+    to_csv('./data/graphs/sub_tweets_top_user_stats_%s.csv'%(location),index=True)
 
 
 
+###############################################
+# Create clusters
 ###############################################
 g = G2_draw.copy()
 top_adj = nx.adjacency_matrix(g).todense()
@@ -270,17 +310,30 @@ if GEN_COMM:
     print(community_nodes_df.shape, keep_nodes_df.shape, communities_i_df.shape)
     assert community_nodes_df.shape[0] == keep_nodes_df.shape[0]
     assert keep_nodes_df.shape[0] == communities_i_df.shape[0]
-    community_nodes_df.to_csv('../graphs/%s_2_communities_tweets_sub_follower.csv'%(location))
+    community_nodes_df.to_csv('./data/graphs/%s_communities_tweets_sub_follower.csv'%(location))
 else:
-    community_nodes_df = pd.read_csv('../graphs/%s_2_communities_tweets_sub_follower.csv'%(location))
-    # tmp = [[(i,n) for n in c] for i,c in enumerate(communities)]
-    communities2 = []
+    community_nodes_df = pd.read_csv('./data/graphs/%s_communities_tweets_sub_follower.csv'%(location))
+    communities = []
+
     for i,grp in community_nodes_df.groupby('group'):
-        communities2.append(set(grp.node_i.values))
+        communities.append(set(grp.node_i.values))
+        # select nodes with >1 degree
+        keep_nodes_i = []
+        for c in communities:
+            if len(c)>1:
+                keep_nodes_i.append(c)
+        keep_nodes_i = flatten1(keep_nodes_i)
+        keep_nodes_df = pd.DataFrame(
+            [(int(i),n) for i,n in enumerate(g.nodes) if i in keep_nodes_i],
+            columns=['node_i', 'node_username']
+        )
+        keep_nodes = np.array(keep_nodes_df.values)
+
 
 
 ##########################################################
-# greate subgrpah with just kept nodes
+# greate subgraph with just kept nodes
+##########################################################
 map3 = {}
 for i,k in keep_nodes:
     map3[k] = [int(i)]
@@ -293,10 +346,10 @@ for i,k in keep_nodes2:
 mapping = list(g.nodes())
 print(communities)
 # reset all clusters
-for n in tqdm.tqdm(g2.nodes()):
+for n in tqdm.tqdm(g2.nodes(), desc='groups 1'):
     g2.nodes[n]['group'] = -1
 # assign clusters
-for i,c in tqdm.tqdm(enumerate(communities), total=len(communities)):
+for i,c in tqdm.tqdm(enumerate(communities), total=len(communities), desc='communities'):
     if len(c) > 1:
         print((i,len(c)), end='')
     for ni in c:
@@ -304,9 +357,8 @@ for i,c in tqdm.tqdm(enumerate(communities), total=len(communities)):
             ni2 = map3[mapping[ni]][0]
             g2.nodes[mapping[ni2]]['group'] = i
 
-
 g2_2 = g2.copy()
-for n in tqdm.tqdm(g2.nodes()):
+for n in tqdm.tqdm(g2.nodes(), desc='groups 2'):
     g2_2.nodes[n]['group'] = -1
 
 for group, grp in community_nodes_df.groupby(['group']):
@@ -316,32 +368,15 @@ for group, grp in community_nodes_df.groupby(['group']):
 
 
 ############################################
-# generate grpah
-plot_g_pyviz(g, name='../graphs/girv_main2_%s_2_other_sub_follower.html'%(location), width='800px', height='800px', graph_type='other') #top + girvan_newman
+# generate graph
+############################################
+plot_g_pyviz(g, name='./data/graphs/girv_main2_%s_other_sub_follower.html'%(location), width='800px', height='800px', graph_type='other') #top + girvan_newman
 
 #############################################
-# save grpah with community groups
+# save graph with community groups
+############################################
 df_g = pd.DataFrame([[user, dt['group']] for user,dt in  list(g.nodes(data=True))])
-df_g.to_csv('../graphs/node_groups_%s_2.csv'%(location),index=False)
+df_g.to_csv('./data/graphs/node_groups_%s_2.csv'%(location),index=False)
 
 
-
-df_g = pd.read_csv('../graphs/node_groups_%s.csv'%(location))
-df_g.columns = ['username','group']
-bias = pd.read_csv('../graphs/sub_tweets_top_user_stats_%s_bias.csv'%(location), encoding = "iso-8859-1").rename(columns={'Unnamed: 0':'tweeter_username'})
-bias = bias[~pd.isnull(bias.prank)]
-
-tmp = df_g.merge(bias, left_on='username', right_on='tweeter_username', how='inner')
-
-df_g = []
-for location  in ['quebec', 'ontario', 'british_columbia']:
-    _df_g = pd.read_csv('../graphs/node_groups_%s.csv'%(location))
-    _df_g.columns = ['username','group']
-    _df_g.location = location
-    _tweets = pd.read_csv('../graphs/sub_tweets_top_user_stats_%s_bias.csv'%(location), encoding = "iso-8859-1").rename(columns={'Unnamed: 0':'tweeter_username'})
-    _tweets = _tweets[~pd.isnull(_tweets.prank)]
-    _tweets.location = location
-    _bias = _df_g.merge(_bias, left_on='username', right_on='tweeter_username', how='inner')
-    _bias = pd.read_csv('../graphs/sub_tweets_top_user_stats_%s_bias.csv'%(location), encoding = "iso-8859-1").rename(columns={'Unnamed: 0':'tweeter_username'})
-    _bias = _bias[~pd.isnull(_bias.prank)]
 

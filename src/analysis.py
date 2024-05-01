@@ -1,4 +1,13 @@
-from misc_lib import *
+############################################################################
+# Perform main analysis of groups.
+# Based on <TOPIC> paramenter.
+#
+# This code combines sentiment files.
+# It resolves tweet_id erros from Twitter/X API.
+############################################################################
+
+
+from .misc_lib import *
 import re, os, tqdm, glob, random, glob, re, sys
 import pandas as pd, numpy as np
 import matplotlib
@@ -14,16 +23,27 @@ from matplotlib.spines import Spine
 from matplotlib.transforms import Affine2D
 
 
+# Some part take a long time to run. To reduce rerunning these portions,
+# output is sved and can be read in instead of regernreating it. 
+# These flags control whether regeneration should run.
 GEN_GRAPHS = True
+
+# include all locations
 LOCATIONS = ['quebec', 'british_columbia', 'ontario']
 
-# When Running COVID-19
-TOPIC = 'COVID'
-DATA_PATH_IN = '../data/sentiment/sentiment*.csv'
 
-# when running Heathcare
-# TOPIC = 'Healhtcare'
-# DATA_PATH_IN = '../data/2023/output_tweets_cleaned_jan-March_sentiments_themed.csv'
+#####################################################################
+# main options:
+# TOPIC = 'COVID'
+# TOPIC = 'Healthcare'
+TOPIC = sys.argv[1]
+if TOPIC == 'COVID':
+    # When Running COVID-19
+    DATA_PATH_IN = './data/sentiment/sentiment*.csv'
+
+elif TOPIC == 'Healthcare':
+    # when running Heathcare
+    DATA_PATH_IN = './data/2023/output_tweets_cleaned_jan-March_sentiments_themed.csv'
 
 
 def radar_factory(num_vars, frame='circle'):
@@ -140,30 +160,21 @@ def mean3d(a,b,c):
 def get_bias(location):
     print(location)
     # from manual file for Core Users
-    bias = pd.read_csv('graphs/sub_tweets_top_user_stats_%s_bias.csv'%(location), encoding = "iso-8859-1").rename(columns={'Unnamed: 0':'tweeter_username'})
+    bias = pd.read_csv('./data/graphs/sub_tweets_top_user_stats_%s_bias.csv'%(location), encoding = "iso-8859-1").rename(columns={'Unnamed: 0':'tweeter_username'})
     bias = bias[~pd.isnull(bias.prank)]
     
 
 
     # from data
-    filename = '../data/%s_retweets.csv'%(location)
+    filename = './data/%s_retweets.csv'%(location)
     tweets = pd.read_csv(filename)
     tweets = tweets[['tweeter_username','username','tweet_id']]
-    # centralities = pd.read_csv('results/centralities_%s.csv'%(location))
-    # centralities['followee_username'] = centralities.node.apply(lambda u: u.lower() if type(u)==str else u)
     tweets['tweeter_username'] = tweets.tweeter_username.apply(lambda u: u.lower() if type(u)==str else u)
     tweets['username'] = tweets.username.apply(lambda u: u.lower() if type(u)==str else u)
 
-    # tweeta after truncation in cluster_truncate
-    # if location == 'quebec':
-    #     main_tweets = pd.read_csv('graphs/%s_2_main_tweets_sub_follower.csv'%(location))
-    # else:
-    main_tweets = pd.read_csv('graphs/%s_main_tweets_sub_follower.csv'%(location))
-    # tweets = tweets[(tweets.tweet_id.isin(main_tweets.tweet_id))&(tweets.username.isin(node_groups.username))]
-    # main_tweets['ratio'].hist(bins=10)
+    main_tweets = pd.read_csv('./data/graphs/%s_main_tweets_sub_follower.csv'%(location))
     main_tweets.drop_duplicates(['tweeter'])[['tweeter','prank','btwn','centr']].sort_values(by='prank',ascending=False)
 
-    # tmp = node_groups.merge(main_tweets, left_on='username', right_on='tweeter')
     res = []
     for (u,grp_bias),grp in main_tweets.merge(bias[['tweeter_username','bias']], left_on='tweeter', right_on='tweeter_username').groupby(['tweeter','bias']):
         # grp_bias
@@ -210,19 +221,13 @@ def get_bias(location):
 def get_bias2(location):
     print(location)
     # from manual file for Core Users
-    bias = pd.read_csv('graphs/sub_tweets_top_user_stats_%s_bias.csv'%(location), encoding = "iso-8859-1").rename(columns={'Unnamed: 0':'tweeter_username'})
+    bias = pd.read_csv('./data/graphs/sub_tweets_top_user_stats_%s_bias.csv'%(location), encoding = "iso-8859-1").rename(columns={'Unnamed: 0':'tweeter_username'})
     bias = bias[~pd.isnull(bias.prank)]
 
 
-    # node_groups = pd.read_csv('graphs/node_groups_%s.csv'%(location))
-    # node_groups.columns=['username','group']
-
-
-    # edges = pd.read_csv('graphs/graph_groups_one_%s.csv'%(location))
-    # from data
-
+    
     import json
-    core_user_ids = pd.DataFrame(json.loads(open('../data/2023/all_user_ids.json').read()).items(), columns=['tweeter_username','author_id'])
+    core_user_ids = pd.DataFrame(json.loads(open('./data/2023/all_user_ids.json').read()).items(), columns=['tweeter_username','author_id'])
     core_user_ids.author_id = core_user_ids.author_id.astype(int)
     
     # Jan 1 - March 15, 2023
@@ -236,17 +241,17 @@ def get_bias2(location):
     
 
     # Dec 2022 - March 2023
-    retweeters_fixed = pd.read_csv('../data/2023/retweeters_fixed.csv')\
+    retweeters_fixed = pd.read_csv('./data/2023/retweeters_fixed.csv')\
         .drop('retweeter_id',axis=1)\
         .rename(columns={'retweeter_username':'username'})
     retweeters_fixed['action'] = 'retweet'
     # Dec 2022 - March 2023
-    output_retweets_Nov =  pd.read_csv('../data/2023/output_retweets_Nov.csv')\
+    output_retweets_Nov =  pd.read_csv('./data/2023/output_retweets_Nov.csv')\
         .drop('retweeter_id',axis=1)\
         .rename(columns={'retweeter_username':'username'})
     output_retweets_Nov['action'] = 'retweet'
     # Dec 31, 2022 - March 15, 2023
-    likers_fixed = pd.read_csv('../data/2023/likers_fixed.csv')\
+    likers_fixed = pd.read_csv('./data/2023/likers_fixed.csv')\
         .drop('liker_id',axis=1)\
         .rename(columns={'liker_username':'username'})
     likers_fixed['action'] = 'like'
@@ -331,7 +336,7 @@ def gen_web_graph(jumped2_grp, theme):
         ax = ax.flatten()
         for i,tmp in enumerate([data.copy(), data[data[jump_col]==0].copy(), data[data[jump_col]!=0].copy()]):
             key = 'tweet_id'
-            mean_sent = tmp.groupby(['bias']).mean().join(tmp.bias.value_counts().rename('tN')).sort_values(by='tN')
+            mean_sent = tmp.groupby(['bias']).mean().join(tmp.bias.value_counts().rename('N')).sort_values(by='N')
             mean_sent = mean_sent.join(tmp.groupby(['bias'])[categories].std(), lsuffix='', rsuffix='_std')
             # mean_sent = tmp.drop_duplicates([key]).groupby(['bias']).mean().join(tmp.drop_duplicates([key]).bias.value_counts().rename('N')).sort_values(by='N')
             # mean_sent = mean_sent.join(tmp.drop_duplicates([key]).groupby(['bias'])[categories].std(), lsuffix='', rsuffix='_std')
@@ -362,7 +367,7 @@ def gen_web_graph(jumped2_grp, theme):
                 # ax[i].legend()
                 ax[i].legend(loc='upper center', bbox_to_anchor=(0.5, 0.15), title="       (N=shared tweets)")#, ncol=3, fancybox=True, shadow=True)
         plt.tight_layout()
-        plt.savefig(f'../data/2023/triag/{theme}_{jump_col}_2.png', bbox_inches="tight")
+        plt.savefig(f'./data/2023/triag/{theme}_{jump_col}_2.png', bbox_inches="tight")
 
 def draw_trends(theme, jumped2_grp):
     sns.reset_orig()
@@ -381,7 +386,7 @@ def draw_trends(theme, jumped2_grp):
     plt.xlabel('Author Political Leaning')
     plt.ylabel('Mean Sentiment')
     plt.tight_layout()
-    plt.savefig(f'../data/2023/trends/{theme}.png', bbox_inches="tight")
+    plt.savefig(f'./data/2023/trends/{theme}.png', bbox_inches="tight")
 
 def tri_cmap():
     def inter_from_256(x):
@@ -424,7 +429,7 @@ def tweet_graphs(theme, jumped2_grp):
     # sns.heatmap(jumped2_grp[['Neutral', 'Positive', 'Negative', 'trend','jumped', 'Conservative','Liberal','Moderate', 'trend_username', 'jumped_username', 'Conservative_username','Liberal_username','Moderate_username']].corr(), annot=True)
     # sns.heatmap(jumped2_grp[['Neutral', 'Negative', 'trend','jumped', 'Conservative','Liberal','Moderate', 'trend_username', 'jumped_username', 'Conservative_username','Liberal_username','Moderate_username']].corr(), annot=True)
     fig.tight_layout()
-    plt.savefig(f'../data/2023/trends/corr_{theme}.png', bbox_inches="tight")
+    plt.savefig(f'./data/2023/trends/corr_{theme}.png', bbox_inches="tight")
     # plt.show()
 
     plt.close()
@@ -447,7 +452,7 @@ def tweet_graphs(theme, jumped2_grp):
     ax[2].set_xticks([0,.5,1])
     ax[2].set_xticklabels(['Negative','Neutral\nx=sent(e)','Positive'])
     fig.tight_layout()
-    plt.savefig(f'../data/2023/trends/shared_distributions_{theme}.png', bbox_inches="tight")
+    plt.savefig(f'./data/2023/trends/shared_distributions_{theme}.png', bbox_inches="tight")
 
 
     sns.reset_orig()
@@ -466,12 +471,6 @@ def tweet_graphs(theme, jumped2_grp):
     plt.plot(x0, p0(x0), c='r')
     plt.xlabel(col4)
     plt.ylabel(col3)
-
-
-    plt.legend()
-    fig.tight_layout()
-    plt.savefig(f'../data/2023/trends/trend_corr_{theme}.png', bbox_inches="tight")
-    plt.show()
 
     def rand_jitter(arr):
         stdev = .05 * (max(arr) - min(arr))
@@ -512,238 +511,180 @@ def tweet_graphs(theme, jumped2_grp):
     plt.grid('on', which='minor', axis='y' )
     plt.grid('on', which='major', axis='y' )
     fig.tight_layout()
-    plt.savefig(f'../data/2023/trends/trend_x_sentiment_outliers_{theme}.png', bbox_inches="tight")
+    plt.savefig(f'./data/2023/trends/trend_x_sentiment_outliers_{theme}.png', bbox_inches="tight")
 
 
+#####################################################
+tmp_jumped = []
+for location in LOCATIONS:
+    if TOPIC == 'COVID':
+        tmp = get_bias(location)
+    elif TOPIC == 'Healthcare':
+        tmp = get_bias2(location)
+    tmp_jumped.append(tmp)
+jumped = pd.concat(tmp_jumped)
 
+sentiments1 = []
+for file in glob.glob(DATA_PATH_IN):
+    print(file)
+    tmp = pd.read_csv(file).drop(columns=['Unnamed: 0'], errors='ignore')
+    tmp[['sentiment_1', 'sentiment_2','sentiment_3']] = tmp[['sentiment_1', 'sentiment_2','sentiment_3']].apply(lambda row: pd.Series([s.title() for s in row.values]))
+    tmp['file'] = os.path.basename(file)
+    sentiments1.append(tmp)
+sentiments1 = pd.concat(sentiments1).reset_index(drop=True).drop_duplicates()
+sentiments1 = sentiments1.rename(columns={'left':'Liberal', 'right':'Conservative', 'mid':'Moderate'})
 
-def main():
+profiles = []
+for file in glob.glob('./data/output_*_authors_db.csv'):
+    tmp = pd.read_csv(file).drop(columns=['Unnamed: 0'], errors='ignore')
+    profiles.append(tmp)
+profiles = pd.concat(profiles).reset_index(drop=True).drop_duplicates()
+profiles['username'] = profiles['username'].apply(lambda name: name.lower())
 
-    tmp_jumped = []
-    for location in LOCATIONS:
-        if TOPIC == 'COVID':
-            tmp = get_bias(location)
-        elif TOPIC == 'Healthcare':
-            tmp = get_bias2(location)
-        tmp_jumped.append(tmp)
-    jumped = pd.concat(tmp_jumped)
-
-    sentiments1 = []
-    for file in glob.glob(DATA_PATH_IN):
-        print(file)
+if TOPIC == 'COVID':
+    sentiments2 = []
+    for file in glob.glob('./data/sentiment/retweets*.csv'):
         tmp = pd.read_csv(file).drop(columns=['Unnamed: 0'], errors='ignore')
         tmp[['sentiment_1', 'sentiment_2','sentiment_3']] = tmp[['sentiment_1', 'sentiment_2','sentiment_3']].apply(lambda row: pd.Series([s.title() for s in row.values]))
-        tmp['file'] = os.path.basename(file)
-        sentiments1.append(tmp)
-    sentiments1 = pd.concat(sentiments1).reset_index(drop=True).drop_duplicates()
-    sentiments1 = sentiments1.rename(columns={'left':'Liberal', 'right':'Conservative', 'mid':'Moderate'})
+        sentiments2.append(tmp)
+    sentiments2 = pd.concat(sentiments2).reset_index(drop=True).drop_duplicates()
+    sentiments2 = sentiments2.merge(profiles, on=['author_id'], how='left')
+    sentiments2['tweeter_username'] = sentiments2['username']
+    sentiments2 = sentiments2.merge(sentiments1[['tweeter_username', 'bias', 'Liberal', 'Moderate', 'Conservative']].drop_duplicates(), on=['tweeter_username'], how='left')
+    sentiments = pd.concat([sentiments1, sentiments2])
+    col_subset = ['author_id','tweeter_username', 'username', 'bias', 'Liberal', 'Moderate', 'Conservative']
+    sentiments.dropna(subset='bias').tweet_id.value_counts()
+    uniq_indx = (sentiments.sort_values(by=['tweet_id','tweeter_username'], na_position='last').dropna(subset=col_subset)
+                .drop_duplicates(subset='tweet_id', keep='first')).index
 
-    profiles = []
-    for file in glob.glob('../data/output_*_authors_db.csv'):
-        tmp = pd.read_csv(file).drop(columns=['Unnamed: 0'], errors='ignore')
-        profiles.append(tmp)
-    profiles = pd.concat(profiles).reset_index(drop=True).drop_duplicates()
-    profiles['username'] = profiles['username'].apply(lambda name: name.lower())
+    # save unique records
+    sentiments = sentiments.loc[uniq_indx]
+elif TOPIC == 'Healthcare':
+    sentiments = sentiments1.copy()
+    sentiments.rename(columns={'id':'tweet_id'}, inplace=True)
+
+
+sentiments = sentiments.merge(jumped[['tweet_id','tweeter_username']].drop_duplicates(), on='tweet_id', how='inner')
+jumped = jumped.merge(sentiments[['tweet_id']].drop_duplicates(), on='tweet_id', how='inner')
+
+
+sentiments = sentiments.drop_duplicates(['author_id', 'tweet_id'], keep='first')
+sentiments.pivot(index='tweet_id',columns=['sentiment_1', 'sentiment_2','sentiment_3'], values=['score_1','score_2','score_3'])
+for col in ['Neutral', 'Positive', 'Negative']:
+    sentiments[col] = sentiments.apply(lambda row: row[f"score_{row[['sentiment_1','sentiment_2','sentiment_3']].tolist().index(col)+1}"], axis=1)
+sentiments = sentiments.drop(columns=['sentiment_1', 'sentiment_2','sentiment_3','score_1','score_2','score_3'])
+sentiments['sentiment'] = sentiments.apply(lambda row: mean3d(row['Negative'], row['Neutral'], row['Positive']), axis=1)
+contents = sentiments[['tweet_id']+['text','Neutral', 'Positive', 'Negative', 'sentiment']].copy()
+
+
+jumped = jumped.merge(contents[['tweet_id']+['sentiment', 'Neutral', 'Positive', 'Negative']], on='tweet_id',how='left')
+jumped.groupby(['username']).mean().join(jumped.username.value_counts().rename('N')).sort_values(by='N')
+jumped.drop_duplicates(['tweet_id']).groupby(['bias']).mean().join(jumped.drop_duplicates(['tweet_id']).bias.value_counts().rename('N')).sort_values(by='N')
+
+
+
+jumped_no_sent = jumped[pd.isnull(jumped.Neutral)].drop_duplicates(['tweet_id'])
+jumped2 =  jumped.dropna(subset=['sentiment','Neutral', 'Positive', 'Negative']).copy()
+
+jumped2 = jumped2.merge(contents[['tweet_id','text']], on='tweet_id',how='left')
+
+# find jumpers (inter-group vs intra-group)
+jumped2['jumped'] = 0
+jumped2['jumped_username'] = 0
+jumped2['jumped_mix'] = 0
+
+jumped2.loc[jumped2[(jumped2['trend']>=0.5)&(jumped2['Negative']>jumped2['Neutral'])].index, 'jumped'] = -1
+jumped2.loc[jumped2[(jumped2['trend']<0.5)&(jumped2['Negative']<jumped2['Neutral'])].index, 'jumped'] = 1
+jumped2.loc[jumped2[(jumped2['trend_username']>=1/2) & ((jumped2['Negative']>jumped2['Neutral'])&(jumped2['Negative']>jumped2['Positive']))].index, 'jumped_username'] = -1
+jumped2.loc[jumped2[(jumped2['trend_username']<1/2)  & ((jumped2['Negative']<jumped2['Neutral'])&(jumped2['Negative']<jumped2['Positive']))].index, 'jumped_username'] = 1
+jumped2.loc[jumped2[(jumped2['trend']>=1/2)&(jumped2['sentiment']<1/3)].index, 'jumped_mix'] = -1
+jumped2.loc[jumped2[(jumped2['trend']<1/2)&(jumped2['sentiment']>=1/3)].index, 'jumped_mix'] = 1
+
+jumped2['jumped_mix_0'] = jumped2.apply(lambda row: int(row['jumped_mix']!=0), axis=1)
+jumped2['jumped_0'] = jumped2.apply(lambda row: int(row['jumped']!=0), axis=1)
+jumped2['jumped_username_0'] = jumped2.apply(lambda row: int(row['jumped_username']!=0), axis=1)
+
+jumped2[(jumped2.jumped==0)&(~pd.isnull(jumped2.text))][['username','tweet_id','Liberal','Moderate','Conservative','trend','Neutral','Positive','Negative','text','jumped']]
+jumped2[(jumped2.jumped==1)&(~pd.isnull(jumped2.text))][['username','tweet_id','Liberal','Moderate','Conservative','trend','Neutral','Positive','Negative','text','jumped']]
+jumped2[(jumped2.jumped==-1)&(~pd.isnull(jumped2.text))][['username','tweet_id','Liberal','Moderate','Conservative','trend','Neutral','Positive','Negative','text','jumped']]
+
+jumped2[(jumped2.jumped_username==0)&(~pd.isnull(jumped2.text))][['username','tweet_id','Liberal','Moderate','Conservative','trend','Neutral','Positive','Negative','text','jumped']]
+jumped2[(jumped2.jumped_username==1)&(~pd.isnull(jumped2.text))][['username','tweet_id','Liberal','Moderate','Conservative','trend','Neutral','Positive','Negative','text','jumped']]
+jumped2[(jumped2.jumped_username==-1)&(~pd.isnull(jumped2.text))][['username','tweet_id','Liberal','Moderate','Conservative','trend','Neutral','Positive','Negative','text','jumped']]
+
+
+if GEN_GRAPHS:
 
     if TOPIC == 'COVID':
-        sentiments2 = []
-        for file in glob.glob('./sentiment/retweets*.csv'):
-            tmp = pd.read_csv(file).drop(columns=['Unnamed: 0'], errors='ignore')
-            tmp[['sentiment_1', 'sentiment_2','sentiment_3']] = tmp[['sentiment_1', 'sentiment_2','sentiment_3']].apply(lambda row: pd.Series([s.title() for s in row.values]))
-            sentiments2.append(tmp)
-        sentiments2 = pd.concat(sentiments2).reset_index(drop=True).drop_duplicates()
-        sentiments2 = sentiments2.merge(profiles, on=['author_id'], how='left')
-        sentiments2['tweeter_username'] = sentiments2['username']
-        sentiments2 = sentiments2.merge(sentiments1[['tweeter_username', 'bias', 'Liberal', 'Moderate', 'Conservative']].drop_duplicates(), on=['tweeter_username'], how='left')
-        sentiments = pd.concat([sentiments1, sentiments2])
-        col_subset = ['author_id','tweeter_username', 'username', 'bias', 'Liberal', 'Moderate', 'Conservative']
-        sentiments.dropna(subset='bias').tweet_id.value_counts()
-        uniq_indx = (sentiments.sort_values(by=['tweet_id','tweeter_username'], na_position='last').dropna(subset=col_subset)
-                    .drop_duplicates(subset='tweet_id', keep='first')).index
+        jumped2_grp = jumped2.copy()
+        theme = 'COVID19'
+        draw_trends(jumped2_grp=jumped2_grp, theme = theme)
+        tweet_graphs(jumped2_grp=jumped2_grp, theme = theme)
+        gen_web_graph(jumped2_grp=jumped2_grp, theme = theme)
 
-        # save unique records
-        sentiments = sentiments.loc[uniq_indx]
     elif TOPIC == 'Healthcare':
-        sentiments = sentiments1.copy()
-        sentiments.rename(columns={'id':'tweet_id'}, inplace=True)
+        jumped2 = jumped2.merge(pd.read_csv(DATA_PATH_IN).rename(columns={'id':'tweet_id'})[['tweet_id','themes', 'theme']], on='tweet_id', how='inner')
+        jumped2['themes2'] = jumped2.themes.apply(lambda themes: eval(themes) if themes==themes else [])
+        themes_list = set(flatten([[t for t in tt] for tt in jumped2.themes2]))
+        # for theme,jumped2_grp in jumped2.groupby('theme'):
+        theme_ids = {}
+        for theme in tqdm.tqdm(themes_list, total=len(themes_list), desc='Assign theme 1'):
+            theme_ids[theme] = [ij for ij,j in jumped2.iterrows() if theme in j.themes2]
+
+        ################
+        # apply category renaming/regrouping
+        theme_rename = {
+            'Ontario Government and Community Services'     : 'Politics (Local and Federal)',
+            'Federal Government and Metro Vancouver'        : 'Politics (Local and Federal)',
+            "Doug Ford's Local Party Updates"               : "Misc Topics",
+            "Indigenous Women's Community Stories and Issues"   : "Minority Issues",
+            "Toronto Community School Student Life"         : 'Politics (Local and Federal)',
+            "Public Health Care in Canada"                  : "Public Health and Politics",
+            "Healthcare Services and Crisis Management"     : "Public Health and Politics",
+            "Canadian Covid History and Risks"              : "Public Health and Politics",
+            "Canadian National Vaccine Plan"                : "Public Health and Politics",
+        }
+        jumped2['themes3'] = jumped2.themes.apply(lambda themes: [] if themes==themes else [])
+        for idx,row in jumped2.iterrows():
+            for k,v in theme_rename.items():
+                if k in row['themes2']:
+                    jumped2.at[idx, 'themes3'].append(v)
+
+        theme_ids3 = {}
+        for theme in tqdm.tqdm(theme_rename.values(), total=len(theme_rename.keys()), desc='Assign Theme 3'):
+            theme_ids3[theme] = [ij for ij,j in jumped2.iterrows() if theme in j.themes3]
+
+        themes_idx = set(flatten([ij for ij,j in jumped2.iterrows() if len(j.themes3)>0]))
+        no_themes_idx = set(flatten([ij for ij,j in jumped2.iterrows() if len(j.themes3)==0]))
+
+        for theme, idxs in theme_ids3.items():
+            jumped2_grp = jumped2.loc[idxs]
+            print(theme, jumped2_grp.shape[0])
 
 
-    sentiments = sentiments.merge(jumped[['tweet_id','tweeter_username']].drop_duplicates(), on='tweet_id', how='inner')
-    jumped = jumped.merge(sentiments[['tweet_id']].drop_duplicates(), on='tweet_id', how='inner')
-    
-
-    sentiments = sentiments.drop_duplicates(['author_id', 'tweet_id'], keep='first')
-    sentiments.pivot(index='tweet_id',columns=['sentiment_1', 'sentiment_2','sentiment_3'], values=['score_1','score_2','score_3'])
-    for col in ['Neutral', 'Positive', 'Negative']:
-        sentiments[col] = sentiments.apply(lambda row: row[f"score_{row[['sentiment_1','sentiment_2','sentiment_3']].tolist().index(col)+1}"], axis=1)
-    sentiments = sentiments.drop(columns=['sentiment_1', 'sentiment_2','sentiment_3','score_1','score_2','score_3'])
-    sentiments['sentiment'] = sentiments.apply(lambda row: mean3d(row['Negative'], row['Neutral'], row['Positive']), axis=1)
-    contents = sentiments[['tweet_id']+['text','Neutral', 'Positive', 'Negative', 'sentiment']].copy()
-
-
-    jumped = jumped.merge(contents[['tweet_id']+['sentiment', 'Neutral', 'Positive', 'Negative']], on='tweet_id',how='left')
-    jumped.groupby(['username']).mean().join(jumped.username.value_counts().rename('N')).sort_values(by='N')
-    jumped.drop_duplicates(['tweet_id']).groupby(['bias']).mean().join(jumped.drop_duplicates(['tweet_id']).bias.value_counts().rename('N')).sort_values(by='N')
-
-    
-
-    jumped_no_sent = jumped[pd.isnull(jumped.Neutral)].drop_duplicates(['tweet_id'])
-    jumped2 =  jumped.dropna(subset=['sentiment','Neutral', 'Positive', 'Negative']).copy()
-
-    jumped2 = jumped2.merge(contents[['tweet_id','text']], on='tweet_id',how='left')
-
-    # find jumpers (inter-group vs intra-group)
-    jumped2['jumped'] = 0
-    jumped2['jumped_username'] = 0
-    jumped2['jumped_mix'] = 0
-
-    jumped2.loc[jumped2[(jumped2['trend']>=0.5)&(jumped2['Negative']>jumped2['Neutral'])].index, 'jumped'] = -1
-    jumped2.loc[jumped2[(jumped2['trend']<0.5)&(jumped2['Negative']<jumped2['Neutral'])].index, 'jumped'] = 1
-    jumped2.loc[jumped2[(jumped2['trend_username']>=1/2) & ((jumped2['Negative']>jumped2['Neutral'])&(jumped2['Negative']>jumped2['Positive']))].index, 'jumped_username'] = -1
-    jumped2.loc[jumped2[(jumped2['trend_username']<1/2)  & ((jumped2['Negative']<jumped2['Neutral'])&(jumped2['Negative']<jumped2['Positive']))].index, 'jumped_username'] = 1
-    jumped2.loc[jumped2[(jumped2['trend']>=1/2)&(jumped2['sentiment']<1/3)].index, 'jumped_mix'] = -1
-    jumped2.loc[jumped2[(jumped2['trend']<1/2)&(jumped2['sentiment']>=1/3)].index, 'jumped_mix'] = 1
-
-    jumped2['jumped_mix_0'] = jumped2.apply(lambda row: int(row['jumped_mix']!=0), axis=1)
-    jumped2['jumped_0'] = jumped2.apply(lambda row: int(row['jumped']!=0), axis=1)
-    jumped2['jumped_username_0'] = jumped2.apply(lambda row: int(row['jumped_username']!=0), axis=1)
-
-    jumped2[(jumped2.jumped==0)&(~pd.isnull(jumped2.text))][['username','tweet_id','Liberal','Moderate','Conservative','trend','Neutral','Positive','Negative','text','jumped']]
-    jumped2[(jumped2.jumped==1)&(~pd.isnull(jumped2.text))][['username','tweet_id','Liberal','Moderate','Conservative','trend','Neutral','Positive','Negative','text','jumped']]
-    jumped2[(jumped2.jumped==-1)&(~pd.isnull(jumped2.text))][['username','tweet_id','Liberal','Moderate','Conservative','trend','Neutral','Positive','Negative','text','jumped']]
-
-    jumped2[(jumped2.jumped_username==0)&(~pd.isnull(jumped2.text))][['username','tweet_id','Liberal','Moderate','Conservative','trend','Neutral','Positive','Negative','text','jumped']]
-    jumped2[(jumped2.jumped_username==1)&(~pd.isnull(jumped2.text))][['username','tweet_id','Liberal','Moderate','Conservative','trend','Neutral','Positive','Negative','text','jumped']]
-    jumped2[(jumped2.jumped_username==-1)&(~pd.isnull(jumped2.text))][['username','tweet_id','Liberal','Moderate','Conservative','trend','Neutral','Positive','Negative','text','jumped']]
-
-
-    if GEN_GRAPHS:
-
-        if TOPIC == 'COVID':
-            jumped2_grp = jumped2.copy()
-            theme = 'COVID19'
-            draw_trends(jumped2_grp=jumped2_grp, theme = theme)
-            tweet_graphs(jumped2_grp=jumped2_grp, theme = theme)
-            gen_web_graph(jumped2_grp=jumped2_grp, theme = theme)
-
-        elif TOPIC == 'Healtcare':
-            jumped2 = jumped2.merge(pd.read_csv(DATA_PATH_IN).rename(columns={'id':'tweet_id'})[['tweet_id','themes', 'theme']], on='tweet_id', how='inner')
-            jumped2['themes2'] = jumped2.themes.apply(lambda themes: eval(themes) if themes==themes else [])
-            themes_list = set(flatten([[t for t in tt] for tt in jumped2.themes2]))
-            # for theme,jumped2_grp in jumped2.groupby('theme'):
-            theme_ids = {}
-            for theme in tqdm.tqdm(themes_list, total=len(themes_list), desc='Assign theme 1'):
-                theme_ids[theme] = [ij for ij,j in jumped2.iterrows() if theme in j.themes2]
-
-            ################
-            # apply category renaming/regrouping
-            theme_rename = {
-                'Ontario Government and Community Services'     : 'Politics (Local and Federal)',
-                'Federal Government and Metro Vancouver'        : 'Politics (Local and Federal)',
-                "Doug Ford's Local Party Updates"               : "Misc Topics",
-                "Indigenous Women's Community Stories and Issues"   : "Minority Issues",
-                "Toronto Community School Student Life"         : 'Politics (Local and Federal)',
-                "Public Health Care in Canada"                  : "Public Health and Politics",
-                "Healthcare Services and Crisis Management"     : "Public Health and Politics",
-                "Canadian Covid History and Risks"              : "Public Health and Politics",
-                "Canadian National Vaccine Plan"                : "Public Health and Politics",
-            }
-            jumped2['themes3'] = jumped2.themes.apply(lambda themes: [] if themes==themes else [])
-            for idx,row in jumped2.iterrows():
-                for k,v in theme_rename.items():
-                    if k in row['themes2']:
-                        jumped2.at[idx, 'themes3'].append(v)
-
-            theme_ids3 = {}
-            for theme in tqdm.tqdm(theme_rename.values(), total=len(theme_rename.keys()), desc='Assign Theme 3'):
-                theme_ids3[theme] = [ij for ij,j in jumped2.iterrows() if theme in j.themes3]
-
-            themes_idx = set(flatten([ij for ij,j in jumped2.iterrows() if len(j.themes3)>0]))
-            no_themes_idx = set(flatten([ij for ij,j in jumped2.iterrows() if len(j.themes3)==0]))
-
-            for theme, idxs in theme_ids3.items():
+        # generate graphs
+        for theme, idxs in theme_ids3.items():
+            try:
                 jumped2_grp = jumped2.loc[idxs]
+
                 print(theme, jumped2_grp.shape[0])
+                if jumped2_grp.shape[0]<100:
+                    continue
+                gen_web_graph(jumped2_grp=jumped2_grp, theme = theme)
+                draw_trends(jumped2_grp=jumped2_grp, theme = theme)
+                tweet_graphs(jumped2_grp=jumped2_grp, theme = theme)
+            except Exception as e:
+                print(e)
+        jumped2_grp = jumped2.copy()
+        theme = 'Healthcare'
+        gen_web_graph(jumped2_grp=jumped2_grp, theme = theme)
+        draw_trends(jumped2_grp=jumped2_grp, theme = theme)
+        tweet_graphs(jumped2_grp=jumped2_grp, theme = theme)
+
+        jumped2_grp = jumped2.loc[no_themes_idx].copy()
+        theme = 'Other Topics'
+        gen_web_graph(jumped2_grp=jumped2_grp, theme = theme)
+        draw_trends(jumped2_grp=jumped2_grp, theme = theme)
+        tweet_graphs(jumped2_grp=jumped2_grp, theme = theme)
 
 
-            # generate graphs
-            for theme, idxs in theme_ids3.items():
-                try:
-                    jumped2_grp = jumped2.loc[idxs]
-
-                    print(theme, jumped2_grp.shape[0])
-                    if jumped2_grp.shape[0]<100:
-                        continue
-                    gen_web_graph(jumped2_grp=jumped2_grp, theme = theme)
-                    draw_trends(jumped2_grp=jumped2_grp, theme = theme)
-                    tweet_graphs(jumped2_grp=jumped2_grp, theme = theme)
-                except Exception as e:
-                    print(e)
-            jumped2_grp = jumped2.copy()
-            theme = 'Healthcare'
-            gen_web_graph(jumped2_grp=jumped2_grp, theme = theme)
-            draw_trends(jumped2_grp=jumped2_grp, theme = theme)
-            tweet_graphs(jumped2_grp=jumped2_grp, theme = theme)
-
-            jumped2_grp = jumped2.loc[no_themes_idx].copy()
-            theme = 'Other Topics'
-            gen_web_graph(jumped2_grp=jumped2_grp, theme = theme)
-            draw_trends(jumped2_grp=jumped2_grp, theme = theme)
-            tweet_graphs(jumped2_grp=jumped2_grp, theme = theme)
-
-
-
-
-
-# # plt.show()
-
-# jumped2[jumped2.bias!=jumped2.affiliation]
-# jumped2[['bias', 'affiliation']]
-
-# # corr = jumped2[['trend']+categories].corr()
-# tmp = jumped2.drop_duplicates(['tweeter_username','tweet_id','bias','text'])[['trend', 'Liberal','Moderate', 'Conservative', 'Neutral', 'Positive', 'Negative']].copy()
-# tmp = tmp[tmp.jumped==1]
-# corr = tmp.corr()
-# plt.close()
-# sns.heatmap(corr, annot=True,
-#         xticklabels=corr.columns,
-#         yticklabels=corr.columns)
-# plt.title(f"Correlation between tweet sentiments")
-# plt.show()
-
-
-
-def get_tweets(username):
-    username = 'sunlorrie'
-    import requests
-
-    url = "https://twttrapi.p.rapidapi.com/user-tweets"
-
-    querystring = {"username":username}
-    querystring = {"username":"elonmusk"}
-    headers = {
-        "X-RapidAPI-Key": "6baea2507emshcff10586cb3d908p17dbe7jsn3daf5710e7a2",
-        "X-RapidAPI-Host": "twttrapi.p.rapidapi.com"
-    }
-
-    response = requests.get(url, headers=headers, params=querystring)
-
-    print(response.json())
-
-
-
-def get_tweets(username):
-    username = 'sunlorrie'
-    import stweet as st    
-    def try_user_scrap(username):
-        user_task = st.GetUsersTask([username])
-        output_json = st.JsonLineFileRawOutput('output_raw_user.jl')
-        output_print = st.PrintRawOutput()
-        res = st.GetUsersRunner(get_user_task=user_task, raw_data_outputs=[output_print, output_json]).run()
-
-    def try_tweet_by_id_scrap(tweet_id):
-        tweet_id = 1634911959068835840
-        id_task = st.TweetsByIdTask(str(tweet_id))
-        output_json = st.JsonLineFileRawOutput('output_raw_id.jl')
-        output_print = st.PrintRawOutput()
-        res = st.TweetsByIdRunner(tweets_by_id_task=id_task, raw_data_outputs=[output_print, output_json]).run()
