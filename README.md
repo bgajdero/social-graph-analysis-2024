@@ -6,7 +6,7 @@ Gajderowicz, B., Fisher, A., Mago, V.: (preperation) "Graph pruning for identify
 
 # Downlaod data
 1. Go to root folder.
-1. Download data as a zip files into root folder. Should contain the following: data_root.zip, data-part.z01, data-part.z02, data-part.z03, data-part.z04, data-part.z05, data-part.zip.
+1. Download data as a [zip files](https://zenodo.org/doi/10.5281/zenodo.11100128) into root folder. Should contain the following: data_root.zip, data-part.z01, data-part.z02, data-part.z03, data-part.z04, data-part.z05, data-part.zip.
 1. `unzip 'data-part.*'`
 1. `unzip data_root.zip -d data`
 
